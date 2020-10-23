@@ -91,9 +91,15 @@ void loop() {
 
           if ((firebaseData.intData()) == 1) {
             Serial.println("Sinar uv hidup");
+            digitalWrite(sinaruv, 0);
+            delay(3000);
+            digitalWrite(sinaruv, 1);
+            delay(1000);
           }
-          else{
+          else {
             Serial.println("Sinar Uv Mati");
+            digitalWrite(sinaruv, 1);
+            delay(1000);
           }
         }
       }
