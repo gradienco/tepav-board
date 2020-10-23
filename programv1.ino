@@ -32,10 +32,6 @@ void setup() {
   pinMode(lockfront, OUTPUT);
   pinMode(lockback, OUTPUT);
 
-  digitalWrite(lockfront, 1);
-  digitalWrite(lockback, 1);
-  digitalWrite(sinaruv, 1);
-
   //inisiasi firebase
   WiFi.disconnect();
   delay(3000);
@@ -52,6 +48,10 @@ void setup() {
   Firebase.reconnectWiFi(true);
 
   dht.begin();
+
+  digitalWrite(lockfront, 1);
+  digitalWrite(lockback, 1);
+  digitalWrite(sinaruv, 1);
 }
 
 void loop() {
@@ -61,11 +61,50 @@ void loop() {
   float volts = analogRead(sensor_sharp) * 0.00048828125; // value from sensor * (5/1024)
   int distance = 13 * pow(volts, -1); // worked out from datasheet graph
   //Serial.println(distance);
-  delay(1000); // slow down serial port
+  //delay(1000); // slow down serial port
   if (distance <= 20 && barangbersih == 0) {
-    Serial.println("Ada Barang");
+    Firebase.setBool(firebaseData, "/device/device_a/sensor/object", true);
+    Firebase.setString(firebaseData, "/packet/packet_a/log/status", "barang masuk");
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    Firebase.setFloat(firebaseData, "/device/device_a/sensor/humidity", h);
+    Firebase.setFloat(firebaseData, "/device/device_a/sensor/temperature", t);
+    //    Serial.print(h);
+    //    Serial.print("    ");
+    //    Serial.println(t);
+    delay(1000);
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return;
+    }
+
+    // cek manual atau otomatis 1 == manual 0 == otomatis
+    if (Firebase.getInt(firebaseData, "system_manual")) {
+
+      unsigned long waktusekarang = millis();
+
+      if ((firebaseData.intData()) == 1) {
+        //Serial.println("System Manual");
+        //  cek tombol ditekan atau tidak 1== ditekan 0==tidak ditekan
+        if (Firebase.getInt(firebaseData, "manual_button")) {
+
+          if ((firebaseData.intData()) == 1) {
+            Serial.println("Sinar uv hidup");
+          }
+          else{
+            Serial.println("Sinar Uv Mati");
+          }
+        }
+      }
+      else {
+        Serial.println("System Otomatis");
+      }
+
+    }
+
   }
-  else{
+  else {
     Serial.println("Gaada Barang");
   }
 }
