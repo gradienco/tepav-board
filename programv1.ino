@@ -14,6 +14,7 @@ unsigned long waktusebelum = 0;
 #define sensor_sharp A3
 #define sensor_uv A0
 #define uvlight 13
+
 int state = 0;
 int barangbersih = 0;
 
@@ -54,5 +55,17 @@ void setup() {
 }
 
 void loop() {
-  lock();
+  lock();// 0 == open 1 == lock
+
+  //sensor sharp
+  float volts = analogRead(sensor_sharp) * 0.00048828125; // value from sensor * (5/1024)
+  int distance = 13 * pow(volts, -1); // worked out from datasheet graph
+  //Serial.println(distance);
+  delay(1000); // slow down serial port
+  if (distance <= 20 && barangbersih == 0) {
+    Serial.println("Ada Barang");
+  }
+  else{
+    Serial.println("Gaada Barang");
+  }
 }
