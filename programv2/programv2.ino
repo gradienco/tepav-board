@@ -1,10 +1,13 @@
 //deklarasi firebase
 #include <WiFi.h>
 #include <FirebaseESP32.h>
-#define FIREBASE_HOST "https://iotbox-e3bbd.firebaseio.com/"
-#define FIREBASE_AUTH "T9cz72ToRljGDoF5CpgBrss5yH6m5dflf2CRo9OZ"
+#include <FirebaseJSON.h>
+
+#define FIREBASE_HOST "https://tepav-6171f.firebaseio.com/"
+#define FIREBASE_AUTH "AIzaSyB9VrEW4KzCoaF6HDMtNB9rh_uF6UyXTyA"
 FirebaseData firebaseData;
 unsigned long waktusebelum = 0;
+FirebaseJson jsonData;
 
 #define lockfront 23
 #define lockback 22
@@ -17,6 +20,22 @@ unsigned long waktusebelum = 0;
 
 int state = 0;
 int barangbersih = 0;
+unsigned long interval = 30; //30 minutes convert to milisecond
+String macAddress;
+String devicePath;
+String userPath;
+String humidityPath;
+String temperaturePath;
+String objectPath;
+String uvPath;
+String btnManualPath;
+String lastPacketId;
+
+long previousMillis = 0;     
+bool ledState = LOW;   
+int ledUV = 1;
+bool sterilState = false;
+bool uvState = false;
 
 //dht22
 #include "DHT.h"
@@ -52,68 +71,128 @@ void setup() {
   digitalWrite(lockfront, 1);
   digitalWrite(lockback, 1);
   digitalWrite(sinaruv, 1);
+
+  //Declare device id
+  macAddress = WiFi.macAddress();
+  devicePath = "/device/"+ macAddress;
+  userPath = devicePath + "/user";
+  temperaturePath =  devicePath + "/sensor/temperature";
+  humidityPath = devicePath + "/sensor/humidity";
+  objectPath = devicePath + "/sensor/object";
+  uvPath = devicePath + "/sensor/uvi";
+  btnManualPath = devicePath + "/action/btnManual";
+  modePath = devicePath + "/modeSteril";
 }
 
 void loop() {
-  unsigned long waktusekarang = millis();
 
-  if (waktusekarang - waktusebelum > 1000) {
+  /* --- LOCK UNLOCK PINTU --- */
+  unsigned long waktusekarang = millis();
+  if (waktusekarang - waktusebelum > 1000) { //ini untuk apa jo?*
     waktusebelum = waktusekarang;
     lock();// 0 == open 1 == lock
   }
 
-  //sensor sharp
-  float volts = analogRead(sensor_sharp) * 0.00048828125; // value from sensor * (5/1024)
-  int distance = 13 * pow(volts, -1); // worked out from datasheet graph
-  //Serial.println(distance);
+
+  /* --- PEMBACAAN SENSOR --- */
   //delay(1000); // slow down serial port
-  if (distance <= 20 && barangbersih == 0) {
-    Firebase.setBool(firebaseData, "/device/device_a/sensor/object", true);
-    Firebase.setString(firebaseData, "/packet/packet_a/log/status", "barang masuk");
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
-    Firebase.setFloat(firebaseData, "/device/device_a/sensor/humidity", h);
-    Firebase.setFloat(firebaseData, "/device/device_a/sensor/temperature", t);
-    //    Serial.print(h);
-    //    Serial.print("    ");
-    //    Serial.println(t);
-    delay(1000);
-    // Check if any reads failed and exit early (to try again).
-    if (isnan(h) || isnan(t)) {
-      Serial.println("Failed to read from DHT sensor!");
-      return;
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  // int uv = ;
+  Firebase.setFloat(firebaseData, humidityPath, h);
+  Firebase.setFloat(firebaseData, temperaturePath, t);
+  //Firebase.setInt(firebaseData, uvPath, uv);
+  //Serial.print("Humi: );
+  //Serial.print(h);
+  //Serial.print(", Temp: ");
+  //Serial.println(t);
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+
+  /* --- PENDETEKSIAN BARANG --- */
+  float volts = analogRead(sensor_sharp) * 0.00048828125; // value from sensor sharp * (5/1024)
+  int distance = 13 * pow(volts, -1); // worked out from datasheet graph
+  //Serial.print("Dist: ");
+  //Serial.println(distance);
+  if (distance <= 20 && barangbersih == 0) { //if any packet entering box
+    Firebase.setBool(firebaseData, objectPath, true);
+    Serial.println("New packet detected");
+
+    Firebase.getString(firebaseData, userPath);
+    String user = firebaseData.stringData();
+    //Post new data to log packet
+    jsonData.set("status", "barang masuk");
+    jsonData.set("device", macAddress);
+    jsonData.set("user", user);
+    if (Firebase.pushJSON(firebaseData, "/packet", jsonData)) {
+      //Serial.println(firebaseData.dataPath());
+      lastPacketId = firebaseData.pushName();
+      //Serial.println(lastPacketId);
+      Serial.println("New data posted to RTD");
+      Serial.println(firebaseData.dataPath() + "/"+ lastPacketId);
+    } else {
+      Serial.println(firebaseData.errorReason());
     }
-
+    
     // cek manual atau otomatis 1 == manual 0 == otomatis
-    if (Firebase.getInt(firebaseData, "system_manual")) {
-
-      if ((firebaseData.intData()) == 1) {
-        //Serial.println("System Manual");
-        //  cek tombol ditekan atau tidak 1== ditekan 0==tidak ditekan
-        if (Firebase.getInt(firebaseData, "manual_button")) {
-
-          if ((firebaseData.intData()) == 1) {
-            Serial.println("Sinar uv hidup");
-            digitalWrite(sinaruv, 0);
-            delay(3000);
-            digitalWrite(sinaruv, 1);
-            delay(1000);
-          }
-          else {
-            Serial.println("Sinar Uv Mati");
-            digitalWrite(sinaruv, 1);
-            delay(1000);
-          }
-        }
+    if (Firebase.getInt(firebaseData, modePath)) {
+      if ((firebaseData.intData()) == 0) { //check mode otomatis
+        Serial.println("System otomatis");
+        sterilState = true;
+        uvState = true;
       }
       else {
-        Serial.println("System Otomatis");
+        Serial.println("System Manual");
       }
-
     }
-
   }
   else {
-    Serial.println("Gaada Barang");
+    // Serial.println("Tidak ada barang");
   }
+
+
+
+  /* --- TOMBOL MANUAL DITEKAN --- */
+  if (Firebase.getInt(firebaseData, btnManualPath)) {
+    if ((firebaseData.intData()) == 1) { 
+      Serial.println("Tombol manual steril ditekan");
+      sterilState = true;
+      uvState = true;
+      Firebase.setInt(firebaseData, btnManualPath, 0);
+    }
+  }
+
+
+
+  /* --- MODE STERILISASI --- */
+  if (sterilState == true){ 
+    Serial.println("Sedang sterilisasi");
+
+    if (uvState == true) {
+      digitalWrite(sinaruv, HIGH);
+      Serial.println("Lampu UV aktif");
+      Serial.println("Update status cleaning dimulai");
+      Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/log/status", "clening dimulai");
+      //TODO: timestamp
+      uvState = false;
+      previousMillis = millis();
+    }
+
+    unsigned long currentMillis = millis();
+    if(currentMillis - previousMillis > interval) {
+      Serial.println("Lampu UV nonaktif");
+      Serial.println("Update status sudah steril");
+      digitalWrite(sinaruv, LOW);
+      Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/log/status", "sudah steril");
+      //TODO: timestamp
+      sterilState = false;
+    }
+  } 
+
+  delay(100); //delay all system
+
 }
