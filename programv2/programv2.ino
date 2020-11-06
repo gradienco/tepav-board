@@ -12,15 +12,12 @@ FirebaseJson jsonData;
 #define lockfront 23
 #define lockback 22
 #define sinaruv 21
-
 #define sensor_pintu 19
 #define sensor_sharp A3
 #define sensor_uv A0
 #define uvlight 13
 
-int state = 0;
-int barangbersih = 0;
-unsigned long interval = 30; //30 minutes convert to milisecond
+//Firebase variable
 String macAddress;
 String devicePath;
 String userPath;
@@ -29,8 +26,12 @@ String temperaturePath;
 String objectPath;
 String uvPath;
 String btnManualPath;
+String modePath
 String lastPacketId;
 
+int state = 0;
+int barangbersih = 0;
+unsigned long interval = 30; //30 minutes convert to milisecond
 long previousMillis = 0;     
 bool ledState = LOW;   
 int ledUV = 1;
@@ -43,19 +44,34 @@ bool uvState = false;
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
 
+//Bluetooth
+#include "BluetoothSerial.h"
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+BluetoothSerial SerialBT;
+
+const char* ssid     = "HKTI PROVINSI";
+const char* password = "tanijaya";
+char wifi[2][32];
+
 void setup() {
   Serial.begin(9600);
+  delay(10);
   pinMode(sensor_pintu, INPUT_PULLUP);
   pinMode(2, OUTPUT);
   pinMode(sinaruv, OUTPUT);
   pinMode(lockfront, OUTPUT);
   pinMode(lockback, OUTPUT);
 
+  SerialBT.begin("Tepav"); //Bluetooth device name
+  Serial.println("Bluetooth started!");
+
   //inisiasi firebase
   WiFi.disconnect();
   delay(3000);
-  Serial.println("START");
-  WiFi.begin("HKTI PROVINSI", "tanijaya");
+  //ssd load from eeprom
+  WiFi.begin(ssid, password);
   while ((!(WiFi.status() == WL_CONNECTED))) {
     delay(300);
     Serial.print("..");
@@ -85,6 +101,34 @@ void setup() {
 }
 
 void loop() {
+
+  if (SerialBT.available()) {
+    Serial.println("Incoming Bluetooth Data");
+    int x = 0;
+    int y = 0;
+    while (SerialBT.available() > 0){
+      const char byteRead = SerialBT.read();
+      if (byteRead==';') {
+        break;
+      } else if (byteRead==':') {
+        x++;
+        y = 0;
+      } else {
+        wifi[x][y] = byteRead;
+        y++;
+      }
+      //Serial.write(SerialBT.read());    
+    }
+    Serial.print("SSID: ");
+    Serial.println(wifi[0]);
+    Serial.print("Password: ");
+    Serial.println(wifi[1]);
+    Serial.println("Restarting...");
+    Serial.flush();
+    //save to EEPROM
+    delay(1000);
+    ESP.restart();
+  }
 
   /* --- LOCK UNLOCK PINTU --- */
   unsigned long waktusekarang = millis();
@@ -125,7 +169,7 @@ void loop() {
     Firebase.getString(firebaseData, userPath);
     String user = firebaseData.stringData();
     //Post new data to log packet
-    jsonData.set("status", "barang masuk");
+    jsonData.set("status", "incoming");
     jsonData.set("device", macAddress);
     jsonData.set("user", user);
     if (Firebase.pushJSON(firebaseData, "/packet", jsonData)) {
@@ -176,7 +220,7 @@ void loop() {
       digitalWrite(sinaruv, HIGH);
       Serial.println("Lampu UV aktif");
       Serial.println("Update status cleaning dimulai");
-      Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/log/status", "clening dimulai");
+      Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/log/status", "cleaning");
       //TODO: timestamp
       uvState = false;
       previousMillis = millis();
@@ -187,7 +231,7 @@ void loop() {
       Serial.println("Lampu UV nonaktif");
       Serial.println("Update status sudah steril");
       digitalWrite(sinaruv, LOW);
-      Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/log/status", "sudah steril");
+      Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/log/status", "sterilized");
       //TODO: timestamp
       sterilState = false;
     }
