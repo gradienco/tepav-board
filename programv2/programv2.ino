@@ -1,19 +1,20 @@
-//deklarasi firebase
 #include <WiFi.h>
 #include <FirebaseESP32.h>
 #include <FirebaseJson.h>
 #include <EEPROM.h>
+#include <WiFiManager.h>
 
+//Firebase
 #define FIREBASE_HOST "https://tepav-6171f.firebaseio.com/"
 #define FIREBASE_AUTH "PkkvZ8N0byvoGsmF5CYF5PojpZ3MU6iTTmOQO6ZF"
 FirebaseData firebaseData;
 unsigned long waktusebelum = 0; //???
 FirebaseJson jsonData;
-//Firebase variable
 String macAddress;
 String devicePath;
 String lastPacketId;
 
+//Input/Output
 #define lockfront 23
 #define lockback 22
 #define sinaruv 21
@@ -21,18 +22,16 @@ String lastPacketId;
 #define sensor_sharp A3
 #define sensor_uv A0
 #define uvlight 13
+#include "DHT.h"
+#define DHTPIN 14
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
 
 int interval = 30; //30 minutes convert to milisecond
 long previousMillis = 0;     
 int ledUV = 1;
 bool sterilState = false;
 bool uvState = false;
-
-//dht22
-#include "DHT.h"
-#define DHTPIN 14
-#define DHTTYPE DHT22
-DHT dht(DHTPIN, DHTTYPE);
 
 //Bluetooth
 // #include "BluetoothSerial.h"
@@ -53,15 +52,28 @@ void setup() {
   delay(10);
 
   //-------------------------Bluetooth Connection
-  // SerialBT.begin("Tepav"); 
+  //SerialBT.begin("Tepav"); 
   //Serial.println("Bluetooth started!");
 
   //------------------------- Wifi Connection
-  WiFi.disconnect();
-  EEPROM.begin(512);
+  //WiFi.disconnect();
   Serial.println("Startup");
   delay(10);
-  //ssd load from eeprom
+  /* --- AUTOCONNECTION -- */
+  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+  WiFiManager wm;
+  bool res = wm.autoConnect("TepavConnection");
+  if(!res) {
+    Serial.println("Failed to connect");
+    // ESP.restart();
+  } 
+  else {
+    //if you get here you have connected to the WiFi    
+    Serial.println("Wifi connected");
+  }
+  /* --- INIT WIFI + EEPROM -- */
+  /*
+  EEPROM.begin(512);
   Serial.println("Reading EEPROM ssid");
   for (int i = 0; i < 32; ++i)
   {
@@ -84,7 +96,8 @@ void setup() {
     delay(300);
     Serial.print("..");
   }
-  Serial.println("Connected");
+  Serial.println("Connected");*/
+  
   Serial.print("Your IP is: ");
   Serial.println((WiFi.localIP()));
 
@@ -95,7 +108,8 @@ void setup() {
   devicePath = "/device/"+ macAddress;
   Serial.print("Your MacAddr is: ");
   Serial.println(macAddress);
-
+  Firebase.setString(firebaseData, devicePath + "/wifi/ssid", WiFi.SSID());
+  
   //-------------------------------Input Output
   pinMode(sensor_pintu, INPUT_PULLUP);
   pinMode(2, OUTPUT);
@@ -110,7 +124,13 @@ void setup() {
 
 void loop() {
 
-  /* --- LOCK UNLOCK PINTU --- */
+  while ((!(WiFi.status() == WL_CONNECTED))) {
+    Serial.println("Disconnected");
+    delay(300000);
+    ESP.restart();
+  }
+
+  /* --- CONFIG VIA BLUETOOTH --- */
   // if (SerialBT.available()) {
   //   // Serial.println("Incoming Bluetooth Data");
   //   int x = 0;
@@ -161,9 +181,10 @@ void loop() {
 
 
   unsigned long waktusekarang = millis();
-  if (waktusekarang - waktusebelum > 1000) { //non interupting delay
+  if (waktusekarang - waktusebelum > 1000) { //non interupting delay 1 second
     waktusebelum = waktusekarang;
-
+    Firebase.setTimestamp(firebaseData, devicePath + "/wifi/lastConnect");
+    
     /* --- LOCK UNLOCK PINTU --- */
     if (Firebase.getInt(firebaseData, devicePath + "/action/frontDoor")) {
       // Serial.print("Lock front: ");
