@@ -17,11 +17,9 @@ String lastPacketId;
 //Input/Output
 #define lockfront 23
 #define lockback 22
-#define sinaruv 21
 #define sensor_pintu 19
-#define sensor_sharp A3
 #define sensor_uv A0
-#define uvlight 13
+#define led 13
 #include "DHT.h"
 #define DHTPIN 14
 #define DHTTYPE DHT22
@@ -114,13 +112,11 @@ void setup() {
   //-------------------------------Input Output
   pinMode(sensor_pintu, INPUT_PULLUP);
   pinMode(2, OUTPUT);
-  pinMode(sinaruv, OUTPUT);
   pinMode(lockfront, OUTPUT);
   pinMode(lockback, OUTPUT);
   dht.begin();
   digitalWrite(lockfront, 1);
   digitalWrite(lockback, 1);
-  digitalWrite(sinaruv, 1);
 }
 
 void loop() {
@@ -287,7 +283,7 @@ void loop() {
     Serial.println("Sedang sterilisasi");
 
     if (uvState == true) {
-      digitalWrite(sinaruv, HIGH);
+      digitalWrite(relay_uv, HIGH);
       Serial.println("Lampu UV aktif");
       Serial.println("Update status cleaning dimulai");
       Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/status", "cleaning");
@@ -303,7 +299,7 @@ void loop() {
     if(currentMillis - previousMillis > interval*1000) { //in seconds: MODE TEST!!
       Serial.println("Lampu UV nonaktif");
       Serial.println("Update status sudah steril");
-      digitalWrite(sinaruv, LOW);
+      digitalWrite(relay_uv, LOW);
       Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/status", "sterilized");
       sterilState = false;
     }
