@@ -1,20 +1,31 @@
 #include <EEPROM.h>
+#include <SoftwareSerial.h>
+
+SoftwareSerial espSerial(10, 11); // RX, TX
+int x=0;
+int str[2]={0,0};
+
 #define sensor_sharp A3
 #define relay_uv 21
 #define led_sterilize 13
 #define led_detector 12
 
-//[TODO] Save to EEPROM
+//Save to EEPROM
 int mode_auto = 1; //1 == OTOMATIS 0 == MANUAL
 int timer_duration = 30;
+
+long previousMillis = 0;     
+bool sterilState = false;
+bool uvState = false;
 
 void setup() {
   Serial.begin(9600);
   delay(10);
   Serial.println("Startup");
 
-  EEPROM.begin(512);
   //Load last state EEPROM
+  mode_auto = EEPROM.read(1);
+  timer_duration = EEPROM.read(2);
 
   pinMode(relay_uv, OUTPUT);
   pinMode(led_sterilize, OUTPUT);
@@ -30,7 +41,8 @@ void loop() {
   int distance = 13 * pow(volts, -1); // worked out from datasheet graph
 
   if (distance <= 20) { //if any packet entering box
-    //[TODO] Send new packet to ESP
+    //Send new packet to ESP
+    espSerial.write("A");
     Serial.println("New packet detected");
 
     if (mode_auto == 1) { 
@@ -54,25 +66,71 @@ void loop() {
       digitalWrite(led_sterilize, HIGH);
       Serial.println("Lampu UV aktif");
       Serial.println("Update status cleaning dimulai");
-      //[TODO] Send cleaning state to ESP
+      //Send cleaning state to ESP
+      espSerial.write("B");
       uvState = false;
       previousMillis = millis();
     }
 
-    if(currentMillis - previousMillis > sterilState*1000) { //in seconds: MODE TEST!!
+    unsigned long currentMillis = millis();
+    if(currentMillis - previousMillis > timer_duration*1000) { //in seconds: MODE TEST!!
       Serial.println("Lampu UV nonaktif");
       Serial.println("Update status sudah steril");
       digitalWrite(relay_uv, LOW);
       digitalWrite(led_sterilize, LOW);
-      //[TODO] Send finish state to ESP
+      //Send finish state to ESP
+      espSerial.write("C");
       sterilState = false;
     }
   }
 
   /* --- RECEIVE CONFIG --- */
-  
+  if (espSerial.available()) {
+    //Serial.write(espSerial.read()); //just for test
 
+    str[0]=0;str[1]=0; //cache var
+    delay(10);
 
-  
+    while (espSerial.available() > 0) {
+        int byteRead = espSerial.read();
+        delay(10);
+
+        if (byteRead=='M'){
+            Serial.println("Tombol manual steril ditekan");
+            sterilState = true;
+            uvState = true;
+            break;
+        }
+        else if(isdigit(byteRead))
+            str[x] = (str[x]*10)+(byteRead-48);
+        else if (byteRead==':'){ //separate data
+            //break;
+            x++;
+        }
+        else if (byteRead==';'){
+            //1 = config mode_auto
+            //2 = config timer_duration
+            if (str[0] == 1) {
+                mode_auto = str[1];
+                Serial.print("Mode auto: ");
+                Serial.println(str[1]);
+                EEPROM.write(1, str[1]);
+            }
+            else if (str[0]== 2) {
+                timer_duration = str[1];
+                Serial.print("Timer duration: ");
+                Serial.println(str[1]);
+                EEPROM.write(2, str[1]);
+            }
+
+            x = 0; //reset string
+        }
+    }
+    Serial.flush();
+  }
+
+  if (Serial.available())
+    espSerial.write(Serial.read());
+
   delay(10);
 }
