@@ -8,7 +8,7 @@
 #define FIREBASE_HOST "https://tepav-6171f.firebaseio.com/"
 #define FIREBASE_AUTH "PkkvZ8N0byvoGsmF5CYF5PojpZ3MU6iTTmOQO6ZF"
 FirebaseData firebaseData;
-unsigned long waktusebelum = 0; //???
+unsigned long waktusebelum = 0; 
 FirebaseJson jsonData;
 String macAddress;
 String devicePath;
@@ -32,6 +32,7 @@ long previousMillis = 0;
 int ledUV = 1;
 bool sterilState = false;
 bool uvState = false;
+int z = 0;
 
 //Bluetooth
 // #include "BluetoothSerial.h"
@@ -124,9 +125,9 @@ void setup() {
 
 void loop() {
 
-  while ((!(WiFi.status() == WL_CONNECTED))) {
+  if ((!(WiFi.status() == WL_CONNECTED))) {
     Serial.println("Disconnected");
-    delay(300000);
+    delay(300000); //freeze until 5 minutes, then restart
     ESP.restart();
   }
 
@@ -181,9 +182,15 @@ void loop() {
 
 
   unsigned long waktusekarang = millis();
-  if (waktusekarang - waktusebelum > 1000) { //non interupting delay 1 second
+  if (waktusekarang - waktusebelum > 5000) { //non interupting delay 1 second
+    Serial.println("start");
     waktusebelum = waktusekarang;
-    Firebase.setTimestamp(firebaseData, devicePath + "/wifi/lastConnect");
+
+    z++;
+    if (z == 60) { //update every 60 seconds
+      Firebase.setTimestamp(firebaseData, devicePath + "/wifi/lastConnect");
+      z = 0;
+    }
     
     /* --- LOCK UNLOCK PINTU --- */
     if (Firebase.getInt(firebaseData, devicePath + "/action/frontDoor")) {
@@ -191,17 +198,16 @@ void loop() {
       // Serial.println((firebaseData.intData()));
       digitalWrite(lockfront, firebaseData.intData());
     }
-    if (Firebase.getInt(firebaseData, devicePath + "/action/backDoor")) {
-      // Serial.print("Lock back: ");
-      // Serial.println((firebaseData.intData()));
-      digitalWrite(lockback, firebaseData.intData());
-    }
-
+//    if (Firebase.getInt(firebaseData, devicePath + "/action/backDoor")) {
+//      // Serial.print("Lock back: ");
+//      // Serial.println((firebaseData.intData()));
+//      digitalWrite(lockback, firebaseData.intData());
+//    }
+//
     /* --- PEMBACAAN SENSOR --- */
-    //delay(1000); // slow down serial port
     int h = dht.readHumidity();
     int t = dht.readTemperature();
-    int uv = 9;
+    int uv = 9; //TODO:
     Firebase.setInt(firebaseData, devicePath + "/sensor/humidity", h);
     Firebase.setInt(firebaseData, devicePath + "/sensor/temperature", t);
     Firebase.setInt(firebaseData, devicePath + "/sensor/uvIndex", uv);
@@ -225,6 +231,7 @@ void loop() {
         Firebase.setInt(firebaseData, devicePath + "/action/manualSteril", 0);
       }
     }
+    Serial.println("end");
   }
 
   /* --- PENDETEKSIAN BARANG --- */
@@ -234,9 +241,9 @@ void loop() {
   //Serial.print("Dist: ");
   //Serial.println(distance);
   
-  if (Firebase.getInt(firebaseData, devicePath + "/sensor/distance")) {
-    distance = firebaseData.intData(); //MODE TEST!!! 
-  }   
+  // if (Firebase.getInt(firebaseData, devicePath + "/sensor/distance")) {
+  //   distance = firebaseData.intData(); //MODE TEST!!! 
+  // }   
   if (distance <= 20) { //if any packet entering box
     Firebase.setBool(firebaseData, devicePath + "/sensor/object", true);
     Serial.println("New packet detected");
@@ -268,7 +275,7 @@ void loop() {
         Serial.println("System Manual");
       }
     }
-    delay(5000);
+    delay(5000); //avoid bottleneck
   }
   else {
     // Serial.println("Tidak ada barang");
@@ -302,6 +309,7 @@ void loop() {
     }
   } 
 
-  delay(100); //delay all system
+  Serial.println("x");
+  delay(10); //delay all system
 
 }
