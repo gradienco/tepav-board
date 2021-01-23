@@ -53,6 +53,8 @@ void loop() {
       else {
         Serial.println("System Manual");
       }
+
+    delay(4000); //avoid bottleneck
   } else {
       // Serial.println("Tidak ada barang");
   }
@@ -88,7 +90,6 @@ void loop() {
   if (espSerial.available()) {
     //Serial.write(espSerial.read()); //just for test
 
-    str[0]=0;str[1]=0; //cache var
     delay(10);
 
     while (espSerial.available() > 0) {
@@ -99,7 +100,6 @@ void loop() {
             Serial.println("Tombol manual steril ditekan");
             sterilState = true;
             uvState = true;
-            break;
         }
         else if(isdigit(byteRead))
             str[x] = (str[x]*10)+(byteRead-48);
@@ -123,10 +123,12 @@ void loop() {
                 EEPROM.write(2, str[1]);
             }
 
-            x = 0; //reset string
+            x = 0; //reset string every ; handle bottleneck
+            str[0]=0;str[1]=0; //reset cache var
         }
     }
-    Serial.flush();
+    x = 0; //reset all pointer
+    espSerial.flush();
   }
 
   if (Serial.available())

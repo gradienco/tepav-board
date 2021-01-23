@@ -47,7 +47,7 @@ char wifi[2][32];
 
 void setup() {
   Serial.begin(9600);
-  Serial1.begin(9600);
+  Serial2.begin(9600);
   delay(10);
 
   //-------------------------Bluetooth Connection
@@ -225,7 +225,7 @@ void loop() {
     if (Firebase.getInt(firebaseData, devicePath + "/action/manualSteril")) {
       if (firebaseData.intData() == 1) { 
         Serial.println("Tombol manual steril ditekan");
-        Serial1.write('M');
+        Serial2.write('M');
         Firebase.setInt(firebaseData, devicePath + "/action/manualSteril", 0);
       }
     }
@@ -234,10 +234,10 @@ void loop() {
     if (Firebase.getInt(firebaseData, devicePath + "/auto")) {
       int data = firebaseData.intData();
       if (mode_auto != data) {
-        Serial1.write("1:");
-        Serial1.write(data);
-        Serial1.write(";");
-        Serial1.write(4); //end of transmission
+        Serial2.write("1:");
+        Serial2.write(data);
+        Serial2.write(";");
+        Serial2.write(4); //end of transmission
       }
     }
       
@@ -245,10 +245,10 @@ void loop() {
     if (Firebase.getInt(firebaseData, devicePath + "/duration")) {
       int data = firebaseData.intData();
       if (timer_duration != data) {
-        Serial1.write("2:");
-        Serial1.write(data);
-        Serial1.write(";");
-        Serial1.write(4); //end of transmission
+        Serial2.write("2:");
+        Serial2.write(data);
+        Serial2.write(";");
+        Serial2.write(4); //end of transmission
       }
     }
       
@@ -256,8 +256,8 @@ void loop() {
   }
 
   /* --- RECEIVE NEW DATA FROM NANO --- */
-  if (Serial1.available()){
-    int byteRead = Serial1.read();
+  if (Serial2.available()){
+    int byteRead = Serial2.read();
     delay(10);
 
     if(byteRead=='A') { //new packet
@@ -286,7 +286,7 @@ void loop() {
     else if (byteRead=='C') { //finish packet
       Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/status", "sterilized");
     }
-    Serial1.flush();
+    Serial2.flush();
   }
 
 
