@@ -19,7 +19,7 @@ String lastPacketId;
 #define lockback 22
 #define sensor_pintu 19
 #define sensor_uv A0
-#define led 13
+#define led_connect 13
 #include "DHT.h"
 #define DHTPIN 14
 #define DHTTYPE DHT22
@@ -47,7 +47,7 @@ char wifi[2][32];
 
 void setup() {
   Serial.begin(9600);
-  Serial2.begin(9600);
+  Serial2.begin(38400);
   delay(10);
 
   //-------------------------Bluetooth Connection
@@ -114,17 +114,23 @@ void setup() {
   pinMode(2, OUTPUT);
   pinMode(lockfront, OUTPUT);
   pinMode(lockback, OUTPUT);
+  pinMode(led_connect, OUTPUT);
   dht.begin();
-  digitalWrite(lockfront, 1);
+  digitalWrite(lockfront, 1); //relay off
   digitalWrite(lockback, 1);
+  digitalWrite(led_connect, 0);
+  
 }
 
 void loop() {
 
   if ((!(WiFi.status() == WL_CONNECTED))) {
     Serial.println("Disconnected");
+    digitalWrite(led_connect, LOW);
     delay(300000); //freeze until 5 minutes, then restart
     ESP.restart();
+  } else {
+    digitalWrite(led_connect, HIGH);
   }
 
   /* --- CONFIG VIA BLUETOOTH --- */
@@ -209,17 +215,17 @@ void loop() {
     }
     
     /* --- LOCK UNLOCK PINTU --- */
-    if (Firebase.getInt(firebaseData, devicePath + "/action/frontDoor")) {
-      // Serial.print("Lock front: ");
-      // Serial.println((firebaseData.intData()));
-      digitalWrite(lockfront, firebaseData.intData());
-    }
-//    if (Firebase.getInt(firebaseData, devicePath + "/action/backDoor")) {
-//      // Serial.print("Lock back: ");
+//    if (Firebase.getInt(firebaseData, devicePath + "/action/frontDoor")) {
+//      // Serial.print("Lock front: ");
 //      // Serial.println((firebaseData.intData()));
-//      digitalWrite(lockback, firebaseData.intData());
+//      digitalWrite(lockfront, firebaseData.intData());
 //    }
-//
+    if (Firebase.getInt(firebaseData, devicePath + "/action/backDoor")) {
+      // Serial.print("Lock back: ");
+      // Serial.println((firebaseData.intData()));
+      digitalWrite(lockback, firebaseData.intData());
+    }
+
     
     /* --- TOMBOL MANUAL DITEKAN --- */
     if (Firebase.getInt(firebaseData, devicePath + "/action/manualSteril")) {
@@ -232,23 +238,25 @@ void loop() {
 
     // Cek Mode 1 == OTOMATIS 0 == MANUAL
     if (Firebase.getInt(firebaseData, devicePath + "/auto")) {
-      int data = firebaseData.intData();
-      if (mode_auto != data) {
-        Serial2.write("1:");
-        Serial2.write(data);
-        Serial2.write(";");
-        Serial2.write(4); //end of transmission
+      int dataRead = firebaseData.intData();
+      if (mode_auto != dataRead) {
+        mode_auto = dataRead;
+        String buff_string = "1:" + String(dataRead) + ";";
+        const char *buff = buff_string.c_str();
+        Serial.println("Mode auto updated");
+        Serial2.write(buff);
       }
     }
       
     // Update timer duration
     if (Firebase.getInt(firebaseData, devicePath + "/duration")) {
-      int data = firebaseData.intData();
-      if (timer_duration != data) {
-        Serial2.write("2:");
-        Serial2.write(data);
-        Serial2.write(";");
-        Serial2.write(4); //end of transmission
+      int dataRead = firebaseData.intData();
+      if (timer_duration != dataRead) {
+        timer_duration = dataRead;
+        String buff_string = "2:" + String(dataRead) + ";";
+        const char *buff = buff_string.c_str();
+        Serial.println("Timer duration updated");
+        Serial2.write(buff);
       }
     }
       
@@ -281,15 +289,21 @@ void loop() {
       }
     }
     else if (byteRead=='B') { //sterilize packet
+      Serial.println("Cleaning packet");
       Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/status", "cleaning");
     }
     else if (byteRead=='C') { //finish packet
+      Serial.println("Packet finished");
       Firebase.setString(firebaseData, "/packet/"+lastPacketId+"/status", "sterilized");
     }
     Serial2.flush();
   }
 
-
+  if (Serial.available()) {
+    //Serial.println(Serial.read());
+    Serial2.write(Serial.read());
+  }
+  
   delay(10); //delay all system
 
 }

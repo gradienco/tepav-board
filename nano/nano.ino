@@ -6,7 +6,7 @@ int x=0;
 int str[2]={0,0};
 
 #define sensor_sharp A3
-#define relay_uv 21
+#define relay_uv 2
 #define led_sterilize 13
 #define led_detector 12
 
@@ -20,6 +20,10 @@ bool uvState = false;
 
 void setup() {
   Serial.begin(9600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for Native USB only
+  }
+  espSerial.begin(38400);
   delay(10);
   Serial.println("Startup");
 
@@ -30,9 +34,9 @@ void setup() {
   pinMode(relay_uv, OUTPUT);
   pinMode(led_sterilize, OUTPUT);
   pinMode(led_detector, OUTPUT);
-  digitalWrite(relay_uv, 1);
-  digitalWrite(led_sterilize, 0);
-  digitalWrite(led_detector, 0);
+  digitalWrite(relay_uv, HIGH);
+  digitalWrite(led_sterilize, LOW);
+  digitalWrite(led_detector, LOW);
 }
 
 void loop() {
@@ -61,7 +65,7 @@ void loop() {
 
   /* --- MODE STERILISASI --- */
   if (sterilState == true){ 
-    Serial.println("Sedang sterilisasi");
+    //Serial.println("Sedang sterilisasi");
 
     if (uvState == true) {
       digitalWrite(relay_uv, HIGH);
@@ -76,6 +80,7 @@ void loop() {
 
     unsigned long currentMillis = millis();
     if(currentMillis - previousMillis > timer_duration*1000) { //in seconds: MODE TEST!!
+//    if(currentMillis - previousMillis > timer_duration*60000) { //in minutes
       Serial.println("Lampu UV nonaktif");
       Serial.println("Update status sudah steril");
       digitalWrite(relay_uv, LOW);
@@ -88,11 +93,10 @@ void loop() {
 
   /* --- RECEIVE CONFIG --- */
   if (espSerial.available()) {
-    //Serial.write(espSerial.read()); //just for test
-
     delay(10);
 
     while (espSerial.available() > 0) {
+        //Serial.write(espSerial.read()); //just for test
         int byteRead = espSerial.read();
         delay(10);
 
@@ -131,8 +135,10 @@ void loop() {
     espSerial.flush();
   }
 
-  if (Serial.available())
+  if (Serial.available()) {
+    //Serial.println(Serial.read());
     espSerial.write(Serial.read());
+  }
 
   delay(10);
 }
