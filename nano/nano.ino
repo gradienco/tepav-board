@@ -48,7 +48,7 @@ void loop() {
   int adc = analogRead(sensor_sharp);
   //Serial.println(adc);
 
-  if (adc >= 130)  //spike filtering
+  if (adc >= 200)  //spike filtering
     times++;
   else 
     times = 0;
@@ -96,8 +96,8 @@ void loop() {
 //    Serial.print(currentMillis - previousMillis);
 //    Serial.print(" ");
 //    Serial.println(timer_duration*1000);
-    if((currentMillis - previousMillis) > (timer_duration*1000)) { //in seconds: MODE TEST!!
-//    if(currentMillis - previousMillis > timer_duration*60000) { //in minutes
+    // if((currentMillis - previousMillis) > (timer_duration*1000)) { //in seconds: MODE TEST!!
+   if(currentMillis - previousMillis > timer_duration*60000) { //in minutes
       Serial.println("Lampu UV nonaktif");
       Serial.println("Update status sudah steril");
       digitalWrite(relay_uv, HIGH);
