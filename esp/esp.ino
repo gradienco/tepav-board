@@ -12,7 +12,7 @@ unsigned long waktusebelum = 0;
 FirebaseJson jsonData;
 String macAddress;
 String devicePath;
-String lastPacketId;
+String lastPacketId = "1";
 
 //Input/Output
 #define lockfront 23
@@ -20,16 +20,19 @@ String lastPacketId;
 #define sensor_pintu 19
 #define sensor_uv A0
 #define led_connect 13
+#define reset_btn 12
 #include "DHT.h"
 #define DHTPIN 14
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
 
-   
+bool reset = false;
+bool pull = false;
+    
 int ledUV = 1;
 int z = 0;
-int mode_auto = 1; //1 == OTOMATIS 0 == MANUAL
-int timer_duration = 30;
+int mode_auto = 2; //1 == OTOMATIS 0 == MANUAL
+int timer_duration = 1;
 
 //Bluetooth
 // #include "BluetoothSerial.h"
@@ -111,6 +114,7 @@ void setup() {
   
   //-------------------------------Input Output
   pinMode(sensor_pintu, INPUT_PULLUP);
+  pinMode(reset_btn, INPUT_PULLUP);
   pinMode(2, OUTPUT);
   pinMode(lockfront, OUTPUT);
   pinMode(lockback, OUTPUT);
@@ -131,6 +135,18 @@ void loop() {
     ESP.restart();
   } else {
     digitalWrite(led_connect, HIGH);
+  }
+
+  if (reset_btn == LOW) {
+    reset = true;
+    pull = false;
+  }
+  else 
+    pull = true;
+    
+  if (reset) {
+    if (pull)
+      ESP.restart();
   }
 
   /* --- CONFIG VIA BLUETOOTH --- */

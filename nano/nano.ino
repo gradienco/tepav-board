@@ -4,6 +4,8 @@
 SoftwareSerial espSerial(10, 11); // RX, TX
 int x=0;
 int str[2]={0,0};
+int times = 0;
+bool objectState = false;
 
 #define sensor_sharp A3
 #define relay_uv 2
@@ -12,7 +14,7 @@ int str[2]={0,0};
 
 //Save to EEPROM
 int mode_auto = 1; //1 == OTOMATIS 0 == MANUAL
-int timer_duration = 30;
+unsigned long timer_duration = 5;
 
 long previousMillis = 0;     
 bool sterilState = false;
@@ -41,10 +43,22 @@ void setup() {
 
 void loop() {
   /* --- PENDETEKSIAN BARANG --- */
-  float volts = analogRead(sensor_sharp) * 0.00048828125; // value from sensor sharp * (5/1024)
-  int distance = 13 * pow(volts, -1); // worked out from datasheet graph
+  //float volts = analogRead(sensor_sharp) * 0.00048828125; // value from sensor sharp * (5/1024)
+  //int distance = 13 * pow(volts, -1); // worked out from datasheet graph
+  int adc = analogRead(sensor_sharp);
+  //Serial.println(adc);
 
-  if (distance <= 20) { //if any packet entering box
+  if (adc >= 130)  //spike filtering
+    times++;
+  else 
+    times = 0;
+  
+  if (times > 5) 
+    objectState = true;
+  else
+    objectState = false;
+
+  if (objectState) { //if any packet entering box
     //Send new packet to ESP
     espSerial.write("A");
     Serial.println("New packet detected");
@@ -68,7 +82,7 @@ void loop() {
     //Serial.println("Sedang sterilisasi");
 
     if (uvState == true) {
-      digitalWrite(relay_uv, HIGH);
+      digitalWrite(relay_uv, LOW);
       digitalWrite(led_sterilize, HIGH);
       Serial.println("Lampu UV aktif");
       Serial.println("Update status cleaning dimulai");
@@ -79,11 +93,14 @@ void loop() {
     }
 
     unsigned long currentMillis = millis();
-    if(currentMillis - previousMillis > timer_duration*1000) { //in seconds: MODE TEST!!
+//    Serial.print(currentMillis - previousMillis);
+//    Serial.print(" ");
+//    Serial.println(timer_duration*1000);
+    if((currentMillis - previousMillis) > (timer_duration*1000)) { //in seconds: MODE TEST!!
 //    if(currentMillis - previousMillis > timer_duration*60000) { //in minutes
       Serial.println("Lampu UV nonaktif");
       Serial.println("Update status sudah steril");
-      digitalWrite(relay_uv, LOW);
+      digitalWrite(relay_uv, HIGH);
       digitalWrite(led_sterilize, LOW);
       //Send finish state to ESP
       espSerial.write("C");
